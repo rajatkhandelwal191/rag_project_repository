@@ -1,5 +1,6 @@
 import os
 import time
+import uuid
 from typing import List, Optional, Dict, Any
 import google.generativeai as genai
 import openai
@@ -130,9 +131,11 @@ class EmbeddingService:
         """Create Embedding objects from raw embeddings"""
         results = []
         for i, (chunk_id, vector) in enumerate(zip(chunk_ids, embeddings)):
+            # Generate a proper UUID for Qdrant point ID
+            vector_uuid = str(uuid.uuid4())
             results.append(Embedding(
                 chunk_id=chunk_id,
-                vector_id=f"vec_{chunk_id}",
+                vector_id=vector_uuid,  # Qdrant requires UUID or unsigned integer
                 values=vector,
                 dimension=len(vector),
                 model=model,

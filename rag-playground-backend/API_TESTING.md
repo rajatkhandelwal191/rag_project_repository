@@ -11,6 +11,7 @@ http://localhost:8080/api/v1
 ## API Documentation
 
 Interactive docs available at:
+
 - Swagger UI: `http://localhost:8080/docs`
 - ReDoc: `http://localhost:8080/redoc`
 
@@ -26,9 +27,9 @@ Upload a document (PDF, TXT, MD, HTML).
 
 **Content-Type:** `multipart/form-data`
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `file` | File | Yes | Document file to upload |
+| Field  | Type | Required | Description             |
+| ------ | ---- | -------- | ----------------------- |
+| `file` | File | Yes      | Document file to upload |
 
 #### cURL Example
 
@@ -73,7 +74,78 @@ document_id = response.json()["document_id"]
 
 ---
 
-## 2. Chunking API
+## 2. Preprocessing API
+
+### POST `/preprocessing/{document_id}`
+
+Clean and preprocess document text.
+
+#### Parameters
+
+| Parameter                 | Type | Default | Description                                    |
+| ------------------------- | ---- | ------- | ---------------------------------------------- |
+| `lowercase`               | bool | false   | Convert text to lowercase                      |
+| `remove_extra_whitespace` | bool | true    | Collapse multiple spaces/newlines              |
+| `normalize_unicode`       | bool | true    | Normalize unicode (NFKC)                       |
+| `remove_urls`             | bool | false   | Remove URL links                               |
+| `remove_emails`           | bool | false   | Remove email addresses                         |
+| `remove_phone_numbers`    | bool | false   | Remove phone numbers                           |
+| `ocr_cleanup`             | bool | false   | Fix OCR artifacts (hyphenation, special chars) |
+| `preserve_punctuation`    | bool | true    | Keep punctuation marks                         |
+
+#### cURL Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/preprocessing/550e8400-e29b-41d4-a716-446655440000?ocr_cleanup=true&normalize_unicode=true" \
+  -H "Content-Type: application/json"
+```
+
+#### Response
+
+```json
+{
+  "document_id": "550e8400-e29b-41d4-a716-446655440000",
+  "raw_text_preview": "Original text with   extra  spaces...",
+  "cleaned_text_preview": "Cleaned text with normal spacing...",
+  "stats_before": {
+    "char_count": 15420,
+    "word_count": 2450,
+    "sentence_count": 120,
+    "avg_word_length": 5.2,
+    "line_count": 45
+  },
+  "stats_after": {
+    "char_count": 15200,
+    "word_count": 2450,
+    "sentence_count": 120,
+    "avg_word_length": 5.2,
+    "line_count": 12
+  },
+  "processing_applied": {
+    "lowercase": false,
+    "remove_extra_whitespace": true,
+    "normalize_unicode": true,
+    "ocr_cleanup": true,
+    "preserve_punctuation": true
+  }
+}
+```
+
+### POST `/preprocessing/preview`
+
+Preview text preprocessing without storing results.
+
+#### cURL Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/preprocessing/preview?ocr_cleanup=true" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Your   sample text\n\nwith  extra   spaces..."}'
+```
+
+---
+
+## 3. Chunking API
 
 ### POST `/chunking/`
 
@@ -92,12 +164,12 @@ Create chunks from uploaded document.
 
 #### Parameters
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `document_id` | string | Yes | - | ID from upload response |
-| `strategy` | enum | No | "fixed" | Options: "fixed", "semantic", "recursive" |
-| `chunk_size` | int | No | 1000 | Characters per chunk |
-| `chunk_overlap` | int | No | 200 | Overlap between chunks |
+| Field           | Type   | Required | Default | Description                               |
+| --------------- | ------ | -------- | ------- | ----------------------------------------- |
+| `document_id`   | string | Yes      | -       | ID from upload response                   |
+| `strategy`      | enum   | No       | "fixed" | Options: "fixed", "semantic", "recursive" |
+| `chunk_size`    | int    | No       | 1000    | Characters per chunk                      |
+| `chunk_overlap` | int    | No       | 200     | Overlap between chunks                    |
 
 #### Strategies
 
@@ -191,21 +263,21 @@ Generate embeddings for chunks.
 
 #### Parameters
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `chunk_ids` | array | Yes | - | List of chunk IDs |
-| `provider` | enum | No | "google" | Options: "google", "openai", "cohere", "local" |
-| `model` | string | No | auto | Model name (depends on provider) |
-| `batch_size` | int | No | 32 | Processing batch size |
+| Field        | Type   | Required | Default  | Description                                    |
+| ------------ | ------ | -------- | -------- | ---------------------------------------------- |
+| `chunk_ids`  | array  | Yes      | -        | List of chunk IDs                              |
+| `provider`   | enum   | No       | "google" | Options: "google", "openai", "cohere", "local" |
+| `model`      | string | No       | auto     | Model name (depends on provider)               |
+| `batch_size` | int    | No       | 32       | Processing batch size                          |
 
 #### Provider Models
 
-| Provider | Default Model | Dimensions |
-|----------|---------------|------------|
-| Google | gemini-embedding-001 | 768 |
-| OpenAI | text-embedding-3-small | 1536 |
-| OpenAI | text-embedding-3-large | 3072 |
-| OpenAI | text-embedding-ada-002 | 1536 |
+| Provider | Default Model          | Dimensions |
+| -------- | ---------------------- | ---------- |
+| Google   | gemini-embedding-001   | 768        |
+| OpenAI   | text-embedding-3-small | 1536       |
+| OpenAI   | text-embedding-3-large | 3072       |
+| OpenAI   | text-embedding-ada-002 | 1536       |
 
 #### cURL Example
 
@@ -258,10 +330,10 @@ Index embeddings to Qdrant vector database.
 
 #### Parameters
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `collection_name` | string | No | "rag_documents" | Qdrant collection name |
-| `distance_metric` | enum | No | "cosine" | Options: "cosine", "euclidean", "dot_product" |
+| Field             | Type   | Required | Default         | Description                                   |
+| ----------------- | ------ | -------- | --------------- | --------------------------------------------- |
+| `collection_name` | string | No       | "rag_documents" | Qdrant collection name                        |
+| `distance_metric` | enum   | No       | "cosine"        | Options: "cosine", "euclidean", "dot_product" |
 
 #### cURL Example
 
@@ -326,12 +398,12 @@ Search for relevant chunks using vector similarity.
 
 #### Parameters
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `query` | string | Yes | - | Search query text |
-| `top_k` | int | No | 5 | Number of results |
-| `collection_name` | string | No | "rag_documents" | Qdrant collection |
-| `filters` | object | No | null | Metadata filters |
+| Field             | Type   | Required | Default         | Description       |
+| ----------------- | ------ | -------- | --------------- | ----------------- |
+| `query`           | string | Yes      | -               | Search query text |
+| `top_k`           | int    | No       | 5               | Number of results |
+| `collection_name` | string | No       | "rag_documents" | Qdrant collection |
+| `filters`         | object | No       | null            | Metadata filters  |
 
 #### cURL Example
 
@@ -358,7 +430,7 @@ curl -X POST "http://localhost:8080/api/v1/retrieval/" \
         "start_pos": 2400,
         "end_pos": 3400,
         "token_count": 245,
-        "metadata": {"strategy": "fixed"}
+        "metadata": { "strategy": "fixed" }
       },
       "score": 0.8923,
       "embedding_id": "vec_chunk_550e8400_3"
@@ -413,7 +485,7 @@ curl -X POST "http://localhost:8080/api/v1/retrieval/rerank" \
     {
       "original_rank": 0,
       "content": "The first finding is...",
-      "reranked_score": 0.60
+      "reranked_score": 0.6
     }
   ],
   "model": "cross-encoder"
@@ -433,10 +505,7 @@ Generate LLM response using retrieved context.
 ```json
 {
   "query": "Summarize the main points",
-  "context_chunks": [
-    "First relevant chunk...",
-    "Second relevant chunk..."
-  ],
+  "context_chunks": ["First relevant chunk...", "Second relevant chunk..."],
   "provider": "openai",
   "model": "gpt-3.5-turbo",
   "temperature": 0.7,
@@ -447,23 +516,23 @@ Generate LLM response using retrieved context.
 
 #### Parameters
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `query` | string | Yes | - | User question |
-| `context_chunks` | array | Yes | - | Retrieved context chunks |
-| `provider` | enum | No | "openai" | Options: "openai", "google", "anthropic", "cohere" |
-| `model` | string | No | provider default | Model name |
-| `temperature` | float | No | 0.7 | Creativity (0-2) |
-| `max_tokens` | int | No | 1024 | Max response length |
-| `system_prompt` | string | No | default | System instructions |
+| Field            | Type   | Required | Default          | Description                                        |
+| ---------------- | ------ | -------- | ---------------- | -------------------------------------------------- |
+| `query`          | string | Yes      | -                | User question                                      |
+| `context_chunks` | array  | Yes      | -                | Retrieved context chunks                           |
+| `provider`       | enum   | No       | "openai"         | Options: "openai", "google", "anthropic", "cohere" |
+| `model`          | string | No       | provider default | Model name                                         |
+| `temperature`    | float  | No       | 0.7              | Creativity (0-2)                                   |
+| `max_tokens`     | int    | No       | 1024             | Max response length                                |
+| `system_prompt`  | string | No       | default          | System instructions                                |
 
 #### Provider Defaults
 
-| Provider | Default Model |
-|----------|---------------|
-| OpenAI | gpt-3.5-turbo |
-| Google | gemini-2.0-flash |
-| Groq | llama-3.1-8b-instant |
+| Provider | Default Model        |
+| -------- | -------------------- |
+| OpenAI   | gpt-3.5-turbo        |
+| Google   | gemini-2.0-flash     |
+| Groq     | llama-3.1-8b-instant |
 
 #### cURL Example
 
@@ -513,19 +582,108 @@ curl "http://localhost:8080/api/v1/generation/models"
       "id": "openai",
       "name": "OpenAI",
       "models": [
-        {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo"},
-        {"id": "gpt-4", "name": "GPT-4"}
+        { "id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo" },
+        { "id": "gpt-4", "name": "GPT-4" }
       ]
     },
     {
       "id": "google",
       "name": "Google",
-      "models": [
-        {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash"}
-      ]
+      "models": [{ "id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash" }]
     }
   ]
 }
+```
+
+---
+
+## 8. Experiment API
+
+### GET `/experiment/summary/{document_id}`
+
+Get complete pipeline summary for a document.
+
+#### cURL Example
+
+```bash
+curl "http://localhost:8080/api/v1/experiment/summary/550e8400-e29b-41d4-a716-446655440000"
+```
+
+#### Response
+
+```json
+{
+  "document_id": "550e8400-e29b-41d4-a716-446655440000",
+  "pipeline_summary": {
+    "document_name": "document.pdf",
+    "total_stages": 8,
+    "completed_stages": 5,
+    "stages": [
+      {
+        "stage": "ingestion",
+        "status": "completed",
+        "details": { "file_size": 1024567, "source_type": "pdf" }
+      },
+      {
+        "stage": "preprocessing",
+        "status": "completed",
+        "details": { "text_reduction_percent": 5.2 }
+      },
+      {
+        "stage": "chunking",
+        "status": "completed",
+        "details": { "total_chunks": 12 }
+      },
+      {
+        "stage": "embedding",
+        "status": "completed",
+        "details": { "total_embedded": 12, "model": "gemini-embedding-001" }
+      }
+    ]
+  },
+  "is_pipeline_ready": true,
+  "can_query": true
+}
+```
+
+### GET `/experiment/compare`
+
+Compare pipeline results across multiple documents.
+
+#### cURL Example
+
+```bash
+curl "http://localhost:8080/api/v1/experiment/compare?document_ids=id1,id2,id3"
+```
+
+### GET `/experiment/stats`
+
+Get overall system statistics.
+
+#### cURL Example
+
+```bash
+curl "http://localhost:8080/api/v1/experiment/stats"
+```
+
+### GET `/experiment/models`
+
+List all available models for embedding and generation.
+
+#### cURL Example
+
+```bash
+curl "http://localhost:8080/api/v1/experiment/models"
+```
+
+### POST `/experiment/reset/{document_id}`
+
+Reset pipeline for a document.
+
+#### cURL Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/experiment/reset/550e8400-e29b-41d4-a716-446655440000?stage=chunking"
 ```
 
 ---
@@ -598,13 +756,13 @@ print(f"\nAnswer: {answer}")
 
 ### Common HTTP Status Codes
 
-| Code | Meaning | Common Causes |
-|------|---------|---------------|
-| 200 | Success | - |
-| 400 | Bad Request | Missing required fields, invalid JSON |
-| 404 | Not Found | Document/chunk not found |
-| 413 | Payload Too Large | File exceeds MAX_FILE_SIZE |
-| 500 | Server Error | Missing API keys, Qdrant not running |
+| Code | Meaning           | Common Causes                         |
+| ---- | ----------------- | ------------------------------------- |
+| 200  | Success           | -                                     |
+| 400  | Bad Request       | Missing required fields, invalid JSON |
+| 404  | Not Found         | Document/chunk not found              |
+| 413  | Payload Too Large | File exceeds MAX_FILE_SIZE            |
+| 500  | Server Error      | Missing API keys, Qdrant not running  |
 
 ### Error Response Format
 

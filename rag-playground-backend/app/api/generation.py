@@ -1,8 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
+import logging
+import traceback
 
 from app.services.llm_service import LLMService
 from app.models.schemas import GenerationRequest, GenerationResponse, LLMProvider
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generation")
 
@@ -13,14 +18,18 @@ llm_service = LLMService()
 @router.post("/", response_model=GenerationResponse)
 async def generate(request: GenerationRequest):
     """Generate response using LLM with context"""
+    logger.info(f"Generate called with query: '{request.query}', provider: {request.provider}, model: {request.model}")
     
     if not request.query:
+        logger.warning("Query is empty")
         raise HTTPException(status_code=400, detail="Query is required")
     
     if not request.context_chunks:
+        logger.warning("No context chunks provided")
         raise HTTPException(status_code=400, detail="Context chunks are required")
     
     try:
+        logger.info(f"Generating response with {len(request.context_chunks)} context chunks")
         response = await llm_service.generate_response(
             query=request.query,
             context_chunks=request.context_chunks,
@@ -30,10 +39,11 @@ async def generate(request: GenerationRequest):
             max_tokens=request.max_tokens,
             system_prompt=request.system_prompt
         )
-        
+        logger.info(f"Response generated successfully. Tokens used: {response.input_tokens} input, {response.output_tokens} output")
         return response
-        
     except Exception as e:
+        logger.error(f"Generation error: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Generation error: {str(e)}")
 
 
@@ -41,6 +51,8 @@ async def generate(request: GenerationRequest):
 async def evaluate_response(request: dict):
     """Evaluate generation metrics"""
     from app.models.schemas import EvaluationMetrics
+    
+    logger.info(f"Evaluate response called with request: {request}")
     
     latency = request.get("latency", 0)
     input_tokens = request.get("input_tokens", 0)
@@ -64,12 +76,14 @@ async def evaluate_response(request: dict):
         response_quality=80
     )
     
+    logger.info(f"Evaluation metrics calculated: {metrics}")
     return metrics
 
 
 @router.get("/models")
 async def list_models():
     """List available LLM models"""
+    logger.info("List models called")
     return {
         "providers": [
             {
@@ -113,6 +127,7 @@ async def list_models():
 @router.post("/templates")
 async def get_prompt_templates():
     """Get available prompt templates"""
+    logger.info("Get prompt templates called")
     return {
         "templates": [
             {
